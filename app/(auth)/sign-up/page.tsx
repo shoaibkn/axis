@@ -2,6 +2,9 @@ import { GalleryVerticalEnd } from "lucide-react";
 
 import { SignupForm } from "@/components/signup-form";
 
+// Force dynamic rendering for auth pages
+export const dynamic = 'force-dynamic';
+
 export default function SignupPage() {
   return (
     <div className="bg-muted flex min-h-svh flex-col items-center justify-center gap-6 p-6 md:p-10">
