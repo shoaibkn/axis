@@ -5,8 +5,10 @@ export default defineSchema({
   users: defineTable({
     name: v.string(),
     email: v.string(),
-    password: v.string(),
+    passwordHash: v.string(),
+    authUserId: v.string(),
     createdAt: v.number(),
-    updatedAt: v.number(),
-  }).index("by_email", ["email"]),
+  })
+    .index("by_email", ["email"])
+    .index("by_auth_id", ["authUserId"]),
 });

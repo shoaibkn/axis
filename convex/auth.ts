@@ -1,115 +1,120 @@
-import { mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { action } from "./_generated/server";
+import { internal } from "./_generated/api";
+import bcrypt from "bcryptjs";
+import { SignJWT, importPKCS8, type KeyLike } from "jose";
 
-// Edge-compatible base64 encoding/decoding
-const base64Encode = (str: string): string => {
-  if (typeof btoa !== 'undefined') {
-    return btoa(str);
+const ISSUER = process.env.CONVEX_AUTH_ISSUER;
+const AUDIENCE = process.env.CONVEX_AUTH_AUDIENCE;
+const PRIVATE_KEY = process.env.CONVEX_AUTH_PRIVATE_KEY;
+const KEY_ID = process.env.CONVEX_AUTH_KID ?? "convex-auth-key";
+
+let cachedKey: KeyLike | null = null;
+
+function requireEnv(value: string | undefined, name: string) {
+  if (!value) {
+    throw new Error(`Missing ${name} environment variable`);
   }
-  // Fallback for Node.js environments
-  return Buffer.from(str).toString('base64');
-};
+  return value;
+}
 
-const base64Decode = (str: string): string => {
-  if (typeof atob !== 'undefined') {
-    return atob(str);
+async function getPrivateKey() {
+  const rawKey = requireEnv(PRIVATE_KEY, "CONVEX_AUTH_PRIVATE_KEY").replace(
+    /\\n/g,
+    "\n",
+  );
+  if (!cachedKey) {
+    cachedKey = await importPKCS8(rawKey, "RS256");
   }
-  // Fallback for Node.js environments
-  return Buffer.from(str, 'base64').toString();
-};
+  return cachedKey;
+}
 
-// Simple token generation using base64 encoding (Edge-compatible)
-const generateToken = (userId: any): string => {
-  // Convert Convex Id to string for token storage
-  const userIdStr = typeof userId === 'string' ? userId : JSON.stringify(userId);
-  const payload = { userId: userIdStr, exp: Date.now() + 7 * 24 * 60 * 60 * 1000 }; // 7 days
-  return base64Encode(JSON.stringify(payload));
-};
+async function signToken(authUserId: string) {
+  const issuer = requireEnv(ISSUER, "CONVEX_AUTH_ISSUER");
+  const audience = requireEnv(AUDIENCE, "CONVEX_AUTH_AUDIENCE");
+  const key = await getPrivateKey();
 
-// Edge-compatible password hashing using simple salt
-const hashPassword = async (password: string): Promise<string> => {
-  const salt = "edge-compatible-salt";
-  const combined = password + salt;
-  return base64Encode(combined);
-};
+  return await new SignJWT({})
+    .setProtectedHeader({ alg: "RS256", typ: "JWT", kid: KEY_ID })
+    .setSubject(authUserId)
+    .setIssuer(issuer)
+    .setAudience(audience)
+    .setIssuedAt()
+    .setExpirationTime("7d")
+    .sign(key);
+}
 
-const comparePassword = async (
-  password: string,
-  hashedPassword: string
-): Promise<boolean> => {
-  const salt = "edge-compatible-salt";
-  const combined = password + salt;
-  const expectedHash = base64Encode(combined);
-  return hashedPassword === expectedHash;
-};
-
-export const signUp = mutation({
+export const signup = action({
   args: {
     name: v.string(),
     email: v.string(),
     password: v.string(),
   },
-  handler: async (ctx, args) => {
-    // Check if user already exists
-    const existingUser = await ctx.db
-      .query("users")
-      .withIndex("by_email", (q) => q.eq("email", args.email))
-      .first();
-
-    if (existingUser) {
-      throw new Error("User already exists");
+  handler: async (ctx, { name, email, password }) => {
+    if (password.length < 8) {
+      throw new Error("Password must be at least 8 characters long.");
     }
 
-    // Hash password
-    const hashedPassword = await hashPassword(args.password);
+    const normalizedEmail = email.trim().toLowerCase();
+    const trimmedName = name.trim();
 
-    // Create user
-    const userId = await ctx.db.insert("users", {
-      name: args.name,
-      email: args.email,
-      password: hashedPassword,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+    if (!trimmedName) {
+      throw new Error("Name is required.");
+    }
+
+    const authUserId = crypto.randomUUID();
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    const user = await ctx.runMutation(internal.users.create, {
+      name: trimmedName,
+      email: normalizedEmail,
+      passwordHash,
+      authUserId,
     });
 
-    // Generate token
-    const token = generateToken(userId);
+    if (!user) {
+      throw new Error("Unable to create account.");
+    }
+
+    const token = await signToken(authUserId);
 
     return {
       token,
       user: {
-        _id: userId,
-        name: args.name,
-        email: args.email,
+        _id: user._id,
+        name: user.name,
+        email: user.email,
       },
     };
   },
 });
 
-export const login = mutation({
+export const login = action({
   args: {
     email: v.string(),
     password: v.string(),
   },
-  handler: async (ctx, args) => {
-    // Find user by email
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_email", (q) => q.eq("email", args.email))
-      .first();
+  handler: async (ctx, { email, password }) => {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail || !password) {
+      throw new Error("Invalid email or password.");
+    }
+
+    const user = await ctx.runQuery(internal.users.getByEmail, {
+      email: normalizedEmail,
+    });
 
     if (!user) {
-      throw new Error("Invalid credentials");
+      throw new Error("Invalid email or password.");
     }
 
-    // Verify password
-    const isValidPassword = await comparePassword(args.password, user.password);
-    if (!isValidPassword) {
-      throw new Error("Invalid credentials");
+    const isValid = await bcrypt.compare(password, user.passwordHash);
+    if (!isValid) {
+      throw new Error("Invalid email or password.");
     }
 
-    // Generate token
-    const token = generateToken(user._id);
+    const token = await signToken(user.authUserId);
 
     return {
       token,

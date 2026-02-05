@@ -1,7 +1,13 @@
 // Edge-compatible cookie utilities
 export const setAuthToken = (token: string): void => {
   if (typeof document !== 'undefined') {
-    document.cookie = `authToken=${token}; path=/; max-age=${7 * 24 * 60 * 60}; secure; samesite=strict`;
+    const secure =
+      typeof window !== "undefined" && window.location.protocol === "https:"
+        ? "; secure"
+        : "";
+    document.cookie = `authToken=${token}; path=/; max-age=${
+      7 * 24 * 60 * 60
+    }; samesite=strict${secure}`;
   }
 };
 
@@ -20,6 +26,10 @@ export const getAuthToken = (): string | null => {
 
 export const removeAuthToken = (): void => {
   if (typeof document !== 'undefined') {
-    document.cookie = 'authToken=; path=/; max-age=0; secure; samesite=strict';
+    const secure =
+      typeof window !== "undefined" && window.location.protocol === "https:"
+        ? "; secure"
+        : "";
+    document.cookie = `authToken=; path=/; max-age=0; samesite=strict${secure}`;
   }
 };
