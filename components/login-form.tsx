@@ -19,7 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/contexts/auth-context";
+import { authClient } from "@/lib/auth-client";
 
 export function LoginForm({
   className,
@@ -29,31 +29,35 @@ export function LoginForm({
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [otpLoading, setOtpLoading] = useState(false);
 
   const router = useRouter();
-  const { login } = useAuth();
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setError("");
-
-    if (!email || !password) {
-      setError("Please enter your email and password.");
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      await login(email, password);
-      router.push("/dashboard");
-      router.refresh();
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Unable to log in.";
-      setError(message);
-    } finally {
-      setIsLoading(false);
-    }
+  const handleSignIn = async (ev: React.FormEvent<HTMLFormElement>) => {
+    ev.preventDefault();
+    await authClient.signIn.email(
+      {
+        email,
+        password,
+      },
+      {
+        onRequest: () => {
+          setOtpLoading(true);
+        },
+        onSuccess: (ctx) => {
+          setOtpLoading(false);
+          if (ctx.data.twoFactorRedirect) {
+            router.push("/verify-2fa");
+          } else {
+            router.push("/");
+          }
+        },
+        onError: (ctx) => {
+          setOtpLoading(false);
+          alert(ctx.error.message);
+        },
+      },
+    );
   };
 
   return (
@@ -66,7 +70,7 @@ export function LoginForm({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={(e) => handleSignIn(e)}>
             <FieldGroup>
               <Field>
                 <Button variant="outline" type="button" className="w-full">
