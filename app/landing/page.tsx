@@ -1,9 +1,15 @@
 import { api } from "@/convex/_generated/api";
-import { preloadAuthQuery } from "@/lib/auth-server";
+import {
+  isAuthenticated,
+  preloadAuthQuery,
+} from "@/lib/auth-server";
 import Header from "./header";
 
 const Page = async () => {
-  const preloadedUserQuery = await preloadAuthQuery(api.auth.getCurrentUser);
+  const authenticated = await isAuthenticated();
+  const preloadedUserQuery = authenticated
+    ? await preloadAuthQuery(api.auth.getCurrentUser)
+    : undefined;
 
   return (
     <div>

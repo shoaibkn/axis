@@ -9,9 +9,11 @@ import type { api } from "@/convex/_generated/api";
 export const Header = ({
   preloadedUserQuery,
 }: {
-  preloadedUserQuery: Preloaded<typeof api.auth.getCurrentUser>;
+  preloadedUserQuery?: Preloaded<typeof api.auth.getCurrentUser>;
 }) => {
-  const user = usePreloadedAuthQuery(preloadedUserQuery);
+  const user = preloadedUserQuery
+    ? usePreloadedAuthQuery(preloadedUserQuery)
+    : null;
   return (
     <div>
       {user ? (

@@ -36,6 +36,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                   emailVerified: boolean;
                   image?: null | string;
                   name: string;
+                  twoFactorEnabled: boolean;
                   updatedAt: number;
                   userId?: null | string;
                 };
@@ -109,6 +110,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "email"
                     | "emailVerified"
                     | "image"
+                    | "twoFactorEnabled"
                     | "createdAt"
                     | "updatedAt"
                     | "userId"
@@ -297,6 +299,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "email"
                     | "emailVerified"
                     | "image"
+                    | "twoFactorEnabled"
                     | "createdAt"
                     | "updatedAt"
                     | "userId"
@@ -554,6 +557,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                   emailVerified?: boolean;
                   image?: null | string;
                   name?: string;
+                  twoFactorEnabled?: boolean;
                   updatedAt?: number;
                   userId?: null | string;
                 };
@@ -564,6 +568,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "email"
                     | "emailVerified"
                     | "image"
+                    | "twoFactorEnabled"
                     | "createdAt"
                     | "updatedAt"
                     | "userId"
@@ -787,6 +792,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                   emailVerified?: boolean;
                   image?: null | string;
                   name?: string;
+                  twoFactorEnabled?: boolean;
                   updatedAt?: number;
                   userId?: null | string;
                 };
@@ -797,6 +803,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                     | "email"
                     | "emailVerified"
                     | "image"
+                    | "twoFactorEnabled"
                     | "createdAt"
                     | "updatedAt"
                     | "userId"
@@ -997,6 +1004,26 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           onUpdateHandle?: string;
         },
         any,
+        Name
+      >;
+    };
+    users: {
+      getUser: FunctionReference<
+        "query",
+        "internal",
+        { userId: string },
+        null | {
+          _creationTime: number;
+          _id: string;
+          createdAt: number;
+          email: string;
+          emailVerified: boolean;
+          image?: null | string;
+          name: string;
+          twoFactorEnabled: boolean;
+          updatedAt: number;
+          userId?: null | string;
+        },
         Name
       >;
     };

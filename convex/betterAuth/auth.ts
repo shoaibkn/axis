@@ -7,6 +7,7 @@ import { components } from "../_generated/api";
 import type { DataModel } from "../_generated/dataModel";
 import authConfig from "../auth.config";
 import schema from "./schema";
+import { createAuth } from "../auth";
 
 // Better Auth Component
 export const authComponent = createClient<DataModel, typeof schema>(
@@ -34,7 +35,9 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
 // For `@better-auth/cli`
 export const options = createAuthOptions({} as GenericCtx<DataModel>);
 
-// Better Auth Instance
-export const createAuth = (ctx: GenericCtx<DataModel>) => {
-  return betterAuth(createAuthOptions(ctx));
-};
+// // Better Auth Instance
+// export const createAuth = (ctx: GenericCtx<DataModel>) => {
+//   return betterAuth(createAuthOptions(ctx));
+// };
+
+export const auth = createAuth({} as any);
