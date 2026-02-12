@@ -4,6 +4,8 @@ import "./globals.css";
 import { getToken } from "@/lib/auth-server";
 import { ConvexClientProvider } from "@/components/providers/ConvexClientProvider";
 import { Toaster } from "@/components/ui/sonner";
+import LayoutProvider from "@/components/providers/LayoutProvider";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 const figtree = Figtree({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -33,10 +35,14 @@ export default async function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <ConvexClientProvider initialToken={token}>
-          <Toaster />
-          {children}
-        </ConvexClientProvider>
+        <TooltipProvider>
+          <ConvexClientProvider initialToken={token}>
+            <LayoutProvider>
+              <Toaster />
+              {children}
+            </LayoutProvider>
+          </ConvexClientProvider>
+        </TooltipProvider>
       </body>
     </html>
   );
