@@ -1,9 +1,7 @@
 "use client";
 import { GalleryVerticalEnd } from "lucide-react";
 
-import { LoginForm } from "@/components/login-form";
-import { SignupForm } from "@/components/signup-form";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Field,
   FieldDescription,
@@ -20,11 +18,12 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { authClient } from "@/lib/auth-client";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 
 export default function LoginPage() {
   const [flow, setFlow] = useState("login");
@@ -36,10 +35,32 @@ export default function LoginPage() {
   const [otpLoading, setOtpLoading] = useState(false);
 
   const router = useRouter();
+  const user = useQuery(api.auth.getCurrentUser);
 
-  const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
+  // Redirect authenticated users to dashboard
+  useEffect(() => {
+    if (user) {
+      router.push("/dashboard");
+    }
+  }, [user, router]);
+
+  // Show loading state while checking auth
+  if (user === undefined) {
+    return (
+      <div className="bg-muted flex min-h-svh flex-col items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
+  // If user is authenticated, this will redirect (handled by useEffect)
+  // Return null while redirecting
+  if (user) {
+    return null;
+  }
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    // Handle form submission logic here
     console.log({
       name,
       email,
@@ -60,8 +81,6 @@ export default function LoginPage() {
         email,
         password,
         name,
-        // custom field configured via user.additionalFields in
-        // convex/auth.ts
       },
       {
         onRequest: () => {
@@ -95,7 +114,7 @@ export default function LoginPage() {
           if (ctx.data.twoFactorRedirect) {
             router.push("/verify-2fa");
           } else {
-            router.push("/");
+            router.push("/dashboard");
           }
         },
         onError: (ctx) => {
@@ -106,174 +125,18 @@ export default function LoginPage() {
     );
   };
 
-  // const handleResetPassword = async () => {
-  //   setForgotLoading(true);
-  //   try {
-  //     await authClient.requestPasswordReset({
-  //       email,
-  //       redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/reset-password`,
-  //     });
-  //     alert("Check your email for the reset password link!");
-  //   } catch {
-  //     alert("Failed to send reset password link. Please try again.");
-  //   } finally {
-  //     setForgotLoading(false);
-  //   }
-  // };
-
-  // const handleAnonymousSignIn = async () => {
-  //   await authClient.signIn.anonymous(
-  //     {},
-  //     {
-  //       onRequest: () => {
-  //         setAnonymousLoading(true);
-  //       },
-  //       onSuccess: () => {
-  //         setAnonymousLoading(false);
-  //         router.push("/");
-  //       },
-  //       onError: (ctx) => {
-  //         setAnonymousLoading(false);
-  //         alert(ctx.error.message);
-  //       },
-  //     },
-  //   );
-  // };
-
-  // const handleMagicLinkSignIn = async () => {
-  //   await authClient.signIn.magicLink(
-  //     {
-  //       email,
-  //     },
-  //     {
-  //       onRequest: () => {
-  //         setMagicLinkLoading(true);
-  //       },
-  //       onSuccess: () => {
-  //         setMagicLinkLoading(false);
-  //         alert("Check your email for the magic link!");
-  //       },
-  //       onError: (ctx) => {
-  //         setMagicLinkLoading(false);
-  //         alert(ctx.error.message);
-  //       },
-  //     },
-  //   );
-  // };
-
-  // const handleGithubSignIn = async () => {
-  //   await authClient.signIn.social(
-  //     {
-  //       provider: "github",
-  //     },
-  //     {
-  //       onRequest: () => {
-  //         setOtpLoading(true);
-  //       },
-  //       onResponse: () => setOtpLoading(false),
-  //       onSuccess: () => {
-  //         router.push("/");
-  //       },
-  //       onError: (ctx) => {
-  //         alert(ctx.error.message);
-  //       },
-  //     },
-  //   );
-  // };
-
-  // const handleGoogleSignIn = async () => {
-  //   await authClient.signIn.social(
-  //     {
-  //       provider: "google",
-  //     },
-  //     {
-  //       onRequest: () => {
-  //         setOtpLoading(true);
-  //       },
-  //       onSuccess: () => {
-  //         setOtpLoading(false);
-  //       },
-  //       onError: (ctx) => {
-  //         setOtpLoading(false);
-  //         alert(ctx.error.message);
-  //       },
-  //     },
-  //   );
-  // };
-
-  // const handleSlackSignIn = async () => {
-  //   await authClient.signIn.oauth2(
-  //     {
-  //       providerId: "slack",
-  //     },
-  //     {
-  //       onRequest: () => {
-  //         setOtpLoading(true);
-  //       },
-  //       onSuccess: () => {
-  //         setOtpLoading(false);
-  //       },
-  //       onError: (ctx) => {
-  //         setOtpLoading(false);
-  //         alert(ctx.error.message);
-  //       },
-  //     },
-  //   );
-  // };
-
-  // const handleOtpSignIn = async () => {
-  //   if (!otpSent) {
-  //     await authClient.emailOtp.sendVerificationOtp(
-  //       {
-  //         email,
-  //         type: "sign-in",
-  //       },
-  //       {
-  //         onRequest: () => {
-  //           setOtpLoading(true);
-  //         },
-  //         onSuccess: () => {
-  //           setOtpLoading(false);
-  //           setOtpSent(true);
-  //         },
-  //         onError: (ctx) => {
-  //           setOtpLoading(false);
-  //           alert(ctx.error.message);
-  //         },
-  //       },
-  //     );
-  //   } else {
-  //     await authClient.signIn.emailOtp(
-  //       {
-  //         email,
-  //         otp,
-  //       },
-  //       {
-  //         onRequest: () => {
-  //           setOtpLoading(true);
-  //         },
-  //         onSuccess: () => {
-  //           setOtpLoading(false);
-  //           router.push("/");
-  //         },
-  //         onError: (ctx) => {
-  //           setOtpLoading(false);
-  //           alert(ctx.error.message);
-  //         },
-  //       },
-  //     );
-  //   }
-  // };
-
   return (
     <div className="bg-muted flex min-h-svh flex-col items-center justify-center gap-6 p-6 md:p-10">
       <div className="flex w-full max-w-sm flex-col gap-6">
-        <a href="#" className="flex items-center gap-2 self-center font-medium">
+        <Link
+          href="#"
+          className="flex items-center gap-2 self-center font-medium"
+        >
           <div className="bg-primary text-primary-foreground flex size-6 items-center justify-center rounded-md">
             <GalleryVerticalEnd className="size-4" />
           </div>
-          Acme Inc.
-        </a>
+          Axis
+        </Link>
         {flow === "login" ? (
           // Login Form
           <div className="flex flex-col gap-6">
@@ -330,12 +193,12 @@ export default function LoginPage() {
                     <Field>
                       <div className="flex items-center">
                         <FieldLabel htmlFor="password">Password</FieldLabel>
-                        <a
+                        <Link
                           href="#"
                           className="ml-auto text-sm underline-offset-4 hover:underline"
                         >
                           Forgot your password?
-                        </a>
+                        </Link>
                       </div>
                       <Input
                         id="password"
@@ -360,8 +223,8 @@ export default function LoginPage() {
             </Card>
             <FieldDescription className="px-6 text-center">
               By clicking continue, you agree to our{" "}
-              <a href="#">Terms of Service</a> and{" "}
-              <a href="#">Privacy Policy</a>.
+              <Link href="#">Terms of Service</Link> and{" "}
+              <Link href="#">Privacy Policy</Link>.
             </FieldDescription>
           </div>
         ) : (
@@ -442,8 +305,8 @@ export default function LoginPage() {
             </Card>
             <FieldDescription className="px-6 text-center">
               By clicking continue, you agree to our{" "}
-              <a href="#">Terms of Service</a> and{" "}
-              <a href="#">Privacy Policy</a>.
+              <Link href="#">Terms of Service</Link> and{" "}
+              <Link href="#">Privacy Policy</Link>.
             </FieldDescription>
           </div>
         )}

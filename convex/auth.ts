@@ -148,6 +148,10 @@ export const getCurrentUser = query({
     //   subject: "Verify your email address",
     //   html: "Hello World!",
     // });
-    return authComponent.getAuthUser(ctx);
+    try {
+      return await authComponent.getAuthUser(ctx);
+    } catch {
+      return null;
+    }
   },
 });

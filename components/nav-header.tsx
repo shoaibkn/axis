@@ -1,31 +1,27 @@
-import {
-  Bell,
-  LayoutDashboard,
-  ListFilter,
-  Settings2,
-  Tags,
-} from "lucide-react";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "./ui/breadcrumb";
+"use client";
+import { Bell, LayoutDashboard, ListFilter, Settings2 } from "lucide-react";
 import { Button } from "./ui/button";
-import { ButtonGroup } from "./ui/button-group";
 import { Separator } from "./ui/separator";
 import { SidebarTrigger } from "./ui/sidebar";
-import { NotificationIcon } from "@phosphor-icons/react";
+import { ReactReduxContextValue, useSelector } from "react-redux";
+import { icons, modules } from "@/constants";
+import { useEffect } from "react";
+import { usePathname } from "next/navigation";
 
 export default function NavHeader() {
+  const breads = useSelector((state: any) => state.breadcrumbs).items;
+  const pathname = usePathname();
+
+  const icon = icons.find((icon) => pathname.includes(icon.path));
+
   return (
     <header className="flex flex-col sticky bg-background top-0 rounded-t-xl mb-6 w-full gap-0 h-8 shrink-0 items-center transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-8">
       <div className="flex flex-row w-full border-b bg-background h-8 justify-between px-6 items-center">
         <div className="flex flex-row gap-2 items-center">
-          <LayoutDashboard size={12} />
-          <h1 className="text-sm">Module Title</h1>
+          {icon && <icon.icon className="w-3 h-3" />}
+          <h1 className="text-sm">
+            {breads.length > 0 ? breads[breads.length - 1].title : ""}
+          </h1>
         </div>
 
         <div className="flex flex-row gap-2">

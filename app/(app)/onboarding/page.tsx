@@ -38,7 +38,7 @@ export default function OnboardingPage() {
 
   React.useEffect(() => {
     if (myOrganisations && myOrganisations.length > 0) {
-      const hasIncompleteOrg = myOrganisations.find((org) => !org.onboardingCompleted);
+      const hasIncompleteOrg = myOrganisations.find((org: any) => !org.onboardingCompleted);
       if (!hasIncompleteOrg) {
         router.push("/dashboard");
       }
@@ -101,7 +101,7 @@ export default function OnboardingPage() {
   };
 
   const currentOrgCount = myOrganisations?.filter(
-    (org) => org.subscriptionTier === "pro" || org.subscriptionTier === "enterprise"
+    (org: any) => org.subscriptionTier === "pro" || org.subscriptionTier === "enterprise"
   ).length || 0;
 
   const steps = [
@@ -166,7 +166,7 @@ export default function OnboardingPage() {
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold">Welcome to Axis</h1>
           <p className="text-muted-foreground mt-2">
-            Let's set up your organisation to get started
+            Let&apos;s set up your organisation to get started
           </p>
         </div>
 
