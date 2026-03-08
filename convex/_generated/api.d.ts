@@ -17,6 +17,8 @@ import type * as invitations from "../invitations.js";
 import type * as organizationActions from "../organizationActions.js";
 import type * as organizations from "../organizations.js";
 import type * as r2 from "../r2.js";
+import type * as taskActions from "../taskActions.js";
+import type * as tasks from "../tasks.js";
 import type * as users from "../users.js";
 
 import type {
@@ -35,6 +37,8 @@ declare const fullApi: ApiFromModules<{
   organizationActions: typeof organizationActions;
   organizations: typeof organizations;
   r2: typeof r2;
+  taskActions: typeof taskActions;
+  tasks: typeof tasks;
   users: typeof users;
 }>;
 
