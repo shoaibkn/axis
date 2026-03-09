@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { authClient } from "@/lib/auth-client";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { useLoadingToast } from "@/lib/use-loading-toast";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -12,6 +14,10 @@ export default function DashboardPage() {
   const orgData = useQuery(api.organizations.getMyOrganization);
   const users = useQuery(api.users.listOrganizationUsers);
   const departments = useQuery(api.departments.listDepartments);
+  const isLoadingData =
+    isPending || orgData === undefined || users === undefined || departments === undefined;
+
+  useLoadingToast({ isLoading: isLoadingData, toastId: "dashboard-loading" });
 
   useEffect(() => {
     if (!isPending && !session?.user) {
@@ -19,8 +25,8 @@ export default function DashboardPage() {
     }
   }, [isPending, router, session?.user]);
 
-  if (isPending || orgData === undefined || users === undefined || departments === undefined) {
-    return <main className="p-6">Loading...</main>;
+  if (isLoadingData) {
+    return <PageSkeleton lines={5} />;
   }
 
   if (!orgData) {

@@ -98,6 +98,7 @@ export default defineSchema({
         timezone: v.string(),
       }),
     ),
+    nextRunAt: v.optional(v.number()),
     isActive: v.optional(v.boolean()),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -124,6 +125,7 @@ export default defineSchema({
     completedFinalizedAt: v.optional(v.number()),
     disputedAt: v.optional(v.number()),
     disputeReason: v.optional(v.string()),
+    recurringRunAt: v.optional(v.number()),
     lastStatusUpdatedByUserId: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -133,7 +135,20 @@ export default defineSchema({
     .index("by_assignee", ["assigneeUserId"])
     .index("by_org_and_assignee", ["organizationId", "assigneeUserId"])
     .index("by_org_and_status", ["organizationId", "status"])
-    .index("by_org_and_approver", ["organizationId", "approverUserId"]),
+    .index("by_org_and_approver", ["organizationId", "approverUserId"])
+    .index("by_task_assignee_run", ["taskId", "assigneeUserId", "recurringRunAt"]),
+
+  recurringTaskRuns: defineTable({
+    organizationId: v.id("organizations"),
+    taskId: v.id("tasks"),
+    assigneeUserId: v.string(),
+    runAt: v.number(),
+    taskAssignmentId: v.id("taskAssignments"),
+    generatedAt: v.number(),
+  })
+    .index("by_task", ["taskId"])
+    .index("by_task_assignee_run", ["taskId", "assigneeUserId", "runAt"])
+    .index("by_org", ["organizationId"]),
 
   taskApprovalRequests: defineTable({
     organizationId: v.id("organizations"),

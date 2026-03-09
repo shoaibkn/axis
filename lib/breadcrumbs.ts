@@ -17,6 +17,14 @@ export const breadcrumbMap: Record<string, BreadcrumbNode> = {
 
 export function resolveBreadcrumbs(pathname: string) {
   const cleanPath = pathname.split("?")[0];
+  if (cleanPath.startsWith("/tasks/") && cleanPath.split("/").filter(Boolean).length === 2) {
+    return [
+      { href: "/dashboard", label: "Dashboard" },
+      { href: "/tasks", label: "Tasks" },
+      { href: cleanPath, label: "Task Details" },
+    ];
+  }
+
   const parts = cleanPath.split("/").filter(Boolean);
   const normalizedPath = `/${parts.join("/")}` || "/dashboard";
 

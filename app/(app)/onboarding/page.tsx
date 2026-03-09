@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { authClient } from "@/lib/auth-client";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { useLoadingToast } from "@/lib/use-loading-toast";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -13,6 +15,14 @@ export default function OnboardingPage() {
   const orgData = useQuery(api.organizations.getMyOrganization);
   const departments = useQuery(api.departments.listDepartments);
   const invitations = useQuery(api.invitations.listInvitations);
+
+  const isLoadingData =
+    isSessionPending ||
+    orgData === undefined ||
+    departments === undefined ||
+    invitations === undefined;
+
+  useLoadingToast({ isLoading: isLoadingData, toastId: "onboarding-loading" });
 
   const createOrganization = useMutation(api.organizations.createOrganization);
   const createDepartment = useMutation(api.departments.createDepartment);
@@ -90,8 +100,8 @@ export default function OnboardingPage() {
     }
   }
 
-  if (isSessionPending || orgData === undefined) {
-    return <main className="p-6">Loading...</main>;
+  if (isLoadingData) {
+    return <PageSkeleton lines={5} />;
   }
 
   if (!orgData) {

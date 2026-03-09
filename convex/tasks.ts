@@ -1,5 +1,5 @@
 import { ConvexError, v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { authComponent } from "./auth";
 import { isManagerRole, requireMembership } from "./access";
 
@@ -24,6 +24,32 @@ const recurrenceValidator = v.object({
   interval: v.number(),
   timezone: v.string(),
 });
+
+const nextRunAtFrom = (
+  from: number,
+  recurrence: {
+    frequency: "daily" | "weekly" | "monthly" | "yearly";
+    interval: number;
+  },
+) => {
+  const interval = Math.max(1, recurrence.interval);
+  const date = new Date(from);
+  switch (recurrence.frequency) {
+    case "daily":
+      date.setUTCDate(date.getUTCDate() + interval);
+      break;
+    case "weekly":
+      date.setUTCDate(date.getUTCDate() + interval * 7);
+      break;
+    case "monthly":
+      date.setUTCMonth(date.getUTCMonth() + interval);
+      break;
+    case "yearly":
+      date.setUTCFullYear(date.getUTCFullYear() + interval);
+      break;
+  }
+  return date.getTime();
+};
 
 const normalizeRole = (role: "owner" | "manager" | "admin" | "member") =>
   role === "admin" ? "manager" : role;
@@ -165,6 +191,7 @@ export const createTask = mutation({
     }
 
     const createdAt = now();
+    const recurringRunAt = args.type === "recurring" ? createdAt : undefined;
     const taskId = await ctx.db.insert("tasks", {
       organizationId: membership.organizationId,
       title: args.title.trim(),
@@ -173,22 +200,38 @@ export const createTask = mutation({
       priority: args.priority,
       assignedByUserId: userId,
       recurrence: args.recurrence,
+      nextRunAt:
+        args.type === "recurring" && args.recurrence
+          ? nextRunAtFrom(createdAt, args.recurrence)
+          : undefined,
       isActive: true,
       createdAt,
       updatedAt: createdAt,
     });
 
     for (const assigneeUserId of uniqueAssigneeIds) {
-      await ctx.db.insert("taskAssignments", {
+      const taskAssignmentId = await ctx.db.insert("taskAssignments", {
         organizationId: membership.organizationId,
         taskId,
         assigneeUserId,
         approverUserId: userId,
         status: "pending",
         deadline: args.deadline,
+        recurringRunAt,
         createdAt,
         updatedAt: createdAt,
       });
+
+      if (args.type === "recurring" && recurringRunAt) {
+        await ctx.db.insert("recurringTaskRuns", {
+          organizationId: membership.organizationId,
+          taskId,
+          assigneeUserId,
+          runAt: recurringRunAt,
+          taskAssignmentId,
+          generatedAt: createdAt,
+        });
+      }
     }
 
     for (const attachment of args.attachments ?? []) {
@@ -666,6 +709,120 @@ export const updateTaskActiveState = mutation({
   },
 });
 
+export const generateRecurringTaskInstances = internalMutation({
+  args: {
+    nowMs: v.optional(v.number()),
+    maxRunsPerTask: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const nowMs = args.nowMs ?? now();
+    const maxRunsPerTask = Math.max(1, Math.min(args.maxRunsPerTask ?? 6, 48));
+
+    const recurringTasks = await ctx.db
+      .query("tasks")
+      .filter((q) => q.eq(q.field("type"), "recurring"))
+      .collect();
+
+    let createdAssignments = 0;
+
+    for (const task of recurringTasks) {
+      if (task.isActive === false || !task.recurrence || !task.nextRunAt) {
+        continue;
+      }
+
+      const templateAssignments = await ctx.db
+        .query("taskAssignments")
+        .withIndex("by_task", (q) => q.eq("taskId", task._id))
+        .collect();
+
+      const byAssignee = new Map<string, (typeof templateAssignments)[number]>();
+      for (const assignment of templateAssignments) {
+        const existing = byAssignee.get(assignment.assigneeUserId);
+        if (!existing) {
+          byAssignee.set(assignment.assigneeUserId, assignment);
+          continue;
+        }
+        const existingRunAt = existing.recurringRunAt ?? existing.createdAt;
+        const nextRunAt = assignment.recurringRunAt ?? assignment.createdAt;
+        if (nextRunAt > existingRunAt) {
+          byAssignee.set(assignment.assigneeUserId, assignment);
+        }
+      }
+
+      let nextRunAt = task.nextRunAt;
+      let runsProcessed = 0;
+
+      while (nextRunAt <= nowMs && runsProcessed < maxRunsPerTask) {
+        for (const [assigneeUserId, template] of byAssignee.entries()) {
+          const membership = await ctx.db
+            .query("memberships")
+            .withIndex("by_org_and_user", (q) =>
+              q.eq("organizationId", task.organizationId).eq("userId", assigneeUserId),
+            )
+            .first();
+
+          if (!membership || membership.isDisabled) {
+            continue;
+          }
+
+          const existingRun = await ctx.db
+            .query("recurringTaskRuns")
+            .withIndex("by_task_assignee_run", (q) =>
+              q.eq("taskId", task._id).eq("assigneeUserId", assigneeUserId).eq("runAt", nextRunAt),
+            )
+            .first();
+
+          if (existingRun) {
+            continue;
+          }
+
+          const sourceRunAt = template.recurringRunAt ?? template.createdAt;
+          const sourceDeadline = template.deadline;
+          const deadlineOffset = sourceDeadline ? sourceDeadline - sourceRunAt : undefined;
+
+          const taskAssignmentId = await ctx.db.insert("taskAssignments", {
+            organizationId: task.organizationId,
+            taskId: task._id,
+            assigneeUserId,
+            approverUserId: task.assignedByUserId,
+            status: "pending",
+            deadline: deadlineOffset !== undefined ? nextRunAt + deadlineOffset : undefined,
+            recurringRunAt: nextRunAt,
+            createdAt: nowMs,
+            updatedAt: nowMs,
+          });
+
+          await ctx.db.insert("recurringTaskRuns", {
+            organizationId: task.organizationId,
+            taskId: task._id,
+            assigneeUserId,
+            runAt: nextRunAt,
+            taskAssignmentId,
+            generatedAt: nowMs,
+          });
+
+          createdAssignments += 1;
+        }
+
+        runsProcessed += 1;
+        nextRunAt = nextRunAtFrom(nextRunAt, task.recurrence);
+      }
+
+      if (nextRunAt !== task.nextRunAt) {
+        await ctx.db.patch(task._id, {
+          nextRunAt,
+          updatedAt: nowMs,
+        });
+      }
+    }
+
+    return {
+      createdAssignments,
+      generatedAt: nowMs,
+    };
+  },
+});
+
 export const listTaskAttachments = query({
   args: {
     taskId: v.id("tasks"),
@@ -684,6 +841,138 @@ export const listTaskAttachments = query({
       .collect();
   },
 });
+
+export const getTaskAssignmentTimeline = query({
+  args: {
+    taskAssignmentId: v.id("taskAssignments"),
+  },
+  handler: async (ctx, args) => {
+    const { userId, membership } = await requireMembership(ctx);
+    const assignment = await ctx.db.get(args.taskAssignmentId);
+
+    if (!assignment || assignment.organizationId !== membership.organizationId) {
+      throw new ConvexError("Task assignment not found.");
+    }
+
+    const task = await ctx.db.get(assignment.taskId);
+    if (!task) {
+      throw new ConvexError("Task not found.");
+    }
+
+    const canSee =
+      normalizeRole(membership.role) === "owner" ||
+      assignment.assigneeUserId === userId ||
+      task.assignedByUserId === userId;
+
+    if (!canSee) {
+      throw new ConvexError("You do not have access to this task assignment.");
+    }
+
+    const approvalRequests = await ctx.db
+      .query("taskApprovalRequests")
+      .withIndex("by_assignment", (q) => q.eq("taskAssignmentId", assignment._id))
+      .collect();
+
+    const reschedules = await ctx.db
+      .query("taskReschedules")
+      .withIndex("by_assignment", (q) => q.eq("taskAssignmentId", assignment._id))
+      .collect();
+
+    const timeline: Array<{
+      type: string;
+      at: number;
+      title: string;
+      detail?: string;
+      byUserId?: string;
+    }> = [
+      {
+        type: "assignment_created",
+        at: assignment.createdAt,
+        title: "Task assigned",
+        detail: `Assigned to ${assignment.assigneeUserId}`,
+        byUserId: task.assignedByUserId,
+      },
+      {
+        type: "status_current",
+        at: assignment.updatedAt,
+        title: `Current status: ${assignmentDisplayStatusForTimeline(assignment.status)}`,
+        byUserId: assignment.lastStatusUpdatedByUserId,
+        detail: assignment.disputeReason,
+      },
+    ];
+
+    if (assignment.completedRequestedAt) {
+      timeline.push({
+        type: "completed_requested",
+        at: assignment.completedRequestedAt,
+        title: "Completion requested",
+        byUserId: assignment.assigneeUserId,
+      });
+    }
+
+    if (assignment.completedFinalizedAt) {
+      timeline.push({
+        type: "completed_finalized",
+        at: assignment.completedFinalizedAt,
+        title: "Completion finalized",
+      });
+    }
+
+    if (assignment.disputedAt) {
+      timeline.push({
+        type: "disputed",
+        at: assignment.disputedAt,
+        title: "Task disputed",
+        detail: assignment.disputeReason,
+      });
+    }
+
+    for (const request of approvalRequests) {
+      timeline.push({
+        type: "approval_request",
+        at: request.requestedAt,
+        title: `Approval request: ${request.status}`,
+        detail: request.note,
+        byUserId: request.requestedByUserId,
+      });
+
+      if (request.decisionAt) {
+        timeline.push({
+          type: "approval_decision",
+          at: request.decisionAt,
+          title: `Approval ${request.status}`,
+          detail: request.note,
+          byUserId: request.decisionByUserId,
+        });
+      }
+    }
+
+    for (const reschedule of reschedules) {
+      timeline.push({
+        type: "reschedule",
+        at: reschedule.changedAt,
+        title: "Deadline rescheduled",
+        detail: `${new Date(reschedule.oldDeadline).toLocaleString()} -> ${new Date(
+          reschedule.newDeadline,
+        ).toLocaleString()}${reschedule.reason ? ` | ${reschedule.reason}` : ""}`,
+        byUserId: reschedule.changedByUserId,
+      });
+    }
+
+    timeline.sort((a, b) => b.at - a.at);
+
+    return timeline;
+  },
+});
+
+const assignmentDisplayStatusForTimeline = (status: string) => {
+  if (status === "completed_requested") return "Completed (single check)";
+  if (status === "completed_finalized") return "Completed (double check)";
+  if (status === "in_progress") return "In Progress";
+  if (status === "pending") return "Pending";
+  if (status === "disputed") return "Disputed";
+  return status;
+};
 
 export const getTaskAssignmentById = query({
   args: {

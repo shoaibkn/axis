@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { authClient } from "@/lib/auth-client";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { useLoadingToast } from "@/lib/use-loading-toast";
 
 export default function AcceptInvitePage() {
   const router = useRouter();
@@ -20,6 +22,9 @@ export default function AcceptInvitePage() {
 
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isLoadingData = isPending || invitationData === undefined;
+
+  useLoadingToast({ isLoading: isLoadingData, toastId: "accept-invite-loading" });
 
   const invitedEmail = invitationData?.invitation.email.toLowerCase();
   const signedInEmail = session?.user?.email?.toLowerCase();
@@ -62,8 +67,8 @@ export default function AcceptInvitePage() {
     }
   }
 
-  if (isPending || invitationData === undefined) {
-    return <main className="p-6">Loading...</main>;
+  if (isLoadingData) {
+    return <PageSkeleton lines={3} includeGrid={false} />;
   }
 
   if (!token || !invitationData) {

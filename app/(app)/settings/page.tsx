@@ -3,6 +3,8 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { useLoadingToast } from "@/lib/use-loading-toast";
 
 type TabKey = "organization" | "users" | "departments";
 
@@ -25,6 +27,15 @@ export default function SettingsPage() {
   const departments = useQuery(api.departments.listDepartmentsWithMeta);
   const invites = useQuery(api.invitations.listInvitations);
   const imagePresets = useQuery(api.organizations.getOrganizationImagePresets);
+
+  const isLoadingData =
+    orgData === undefined ||
+    users === undefined ||
+    departments === undefined ||
+    invites === undefined ||
+    imagePresets === undefined;
+
+  useLoadingToast({ isLoading: isLoadingData, toastId: "settings-loading" });
 
   const updateOrganization = useMutation(api.organizations.updateOrganizationDetails);
   const updatePlan = useMutation(api.organizations.updatePlan);
@@ -77,8 +88,8 @@ export default function SettingsPage() {
     }
   }, [targetPlan, upgradeOptions]);
 
-  if (orgData === undefined || users === undefined || departments === undefined || invites === undefined) {
-    return <main className="p-6">Loading settings...</main>;
+  if (isLoadingData) {
+    return <PageSkeleton lines={6} />;
   }
 
   const organization = orgData?.organization;
